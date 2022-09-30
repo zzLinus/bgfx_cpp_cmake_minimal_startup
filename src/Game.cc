@@ -1,6 +1,6 @@
 #include "Game.h"
 
-bgfx::VertexLayout PosColorVertex::vrt_layout;
+bgfx::VertexLayout PosNormalTangentTexcoordVertex::ms_layout;
 
 void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32_t _height)
 {
@@ -8,7 +8,7 @@ void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32
 
     m_width = _width;
     m_height = _height;
-    m_debug = BGFX_DEBUG_TEXT;
+    m_debug = BGFX_DEBUG_NONE;
     m_reset = BGFX_RESET_VSYNC;
 
     bgfx::Init init;
@@ -25,43 +25,40 @@ void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32
     bgfx::setDebug(m_debug);
 
     // Set view 0 clear state.
-    bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x022c43ff, 1.0f, 0);
+    bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x303030ff, 1.0f, 0);
+
+    // Get renderer capabilities info.
+    bgfx::Caps const* caps = bgfx::getCaps();
+    m_instancingSupported = 0 != (caps->supported & BGFX_CAPS_INSTANCING);
 
     // Create vertex stream declaration.
-    PosColorVertex::init();
+    PosNormalTangentTexcoordVertex::init();
+
+    calcTangents(s_cubeVertices, BX_COUNTOF(s_cubeVertices), PosNormalTangentTexcoordVertex::ms_layout, s_cubeIndices, BX_COUNTOF(s_cubeIndices));
 
     // Create static vertex buffer.
     m_vbh = bgfx::createVertexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeVertices, sizeof(cubeVertices)), PosColorVertex::vrt_layout);
+        bgfx::makeRef(s_cubeVertices, sizeof(s_cubeVertices)), PosNormalTangentTexcoordVertex::ms_layout);
 
-    // Create static index buffer for triangle list rendering.
-    m_ibh[0] = bgfx::createIndexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeTriList, sizeof(cubeTriList)));
+    // Create static index buffer.
+    m_ibh = bgfx::createIndexBuffer(bgfx::makeRef(s_cubeIndices, sizeof(s_cubeIndices)));
 
-    // Create static index buffer for triangle strip rendering.
-    m_ibh[1] = bgfx::createIndexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeTriStrip, sizeof(cubeTriStrip)));
+    // Create texture sampler uniforms.
+    s_texColor = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    s_texNormal = bgfx::createUniform("s_texNormal", bgfx::UniformType::Sampler);
 
-    // Create static index buffer for line list rendering.
-    m_ibh[2] = bgfx::createIndexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeLineList, sizeof(cubeLineList)));
+    m_numLights = 4;
+    u_lightPosRadius = bgfx::createUniform("u_lightPosRadius", bgfx::UniformType::Vec4, m_numLights);
+    u_lightRgbInnerR = bgfx::createUniform("u_lightRgbInnerR", bgfx::UniformType::Vec4, m_numLights);
 
-    // Create static index buffer for line strip rendering.
-    m_ibh[3] = bgfx::createIndexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeLineStrip, sizeof(cubeLineStrip)));
+    // Create program from shaders.
+    m_program = loadProgram(m_instancingSupported ? "vs_bump_instanced" : "vs_bump", "fs_bump");
 
-    // Create static index buffer for point list rendering.
-    m_ibh[4] = bgfx::createIndexBuffer(
-        // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubePoints, sizeof(cubePoints)));
+    // Load diffuse texture.
+    m_textureColor = loadTexture("textures/fieldstone-rgba.dds");
 
-    // load the shader program which alraedy been compiled
-    m_program = loadProgram("vs_cubes", "fs_cubes");
+    // Load normal texture.
+    m_textureNormal = loadTexture("textures/fieldstone-n.dds");
 
     m_timeOffset = bx::getHPCounter();
 
@@ -72,13 +69,16 @@ int Game::shutdown()
 {
     imguiDestroy();
 
-    // clean up
-    for (uint32_t ii = 0; ii < BX_COUNTOF(m_ibh); ii++) {
-        bgfx::destroy(m_ibh[ii]);
-    }
-
+    // Cleanup.
+    bgfx::destroy(m_ibh);
     bgfx::destroy(m_vbh);
     bgfx::destroy(m_program);
+    bgfx::destroy(m_textureColor);
+    bgfx::destroy(m_textureNormal);
+    bgfx::destroy(s_texColor);
+    bgfx::destroy(s_texNormal);
+    bgfx::destroy(u_lightPosRadius);
+    bgfx::destroy(u_lightRgbInnerR);
 
     // Shutdown bgfx.
     bgfx::shutdown();
@@ -89,33 +89,27 @@ int Game::shutdown()
 bool Game::update()
 {
     if (!entry::processEvents(m_width, m_height, m_debug, m_reset, &m_mouseState)) {
-        imguiBeginFrame(m_mouseState.m_mx, m_mouseState.m_my,
-            (m_mouseState.m_buttons[entry::MouseButton::Left] ? IMGUI_MBUT_LEFT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Right] ? IMGUI_MBUT_RIGHT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Middle] ? IMGUI_MBUT_MIDDLE : 0), m_mouseState.m_mz, uint16_t(m_width), uint16_t(m_height));
+        imguiBeginFrame(m_mouseState.m_mx, m_mouseState.m_my, (m_mouseState.m_buttons[entry::MouseButton::Left] ? IMGUI_MBUT_LEFT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Right] ? IMGUI_MBUT_RIGHT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Middle] ? IMGUI_MBUT_MIDDLE : 0), m_mouseState.m_mz, uint16_t(m_width), uint16_t(m_height));
 
-        showExampleDialog(this);
-
-        ImGui::SetNextWindowPos(
-            ImVec2(m_width - m_width / 5.0f - 10.0f, 10.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(
-            ImVec2(m_width / 5.0f, m_height / 3.5f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Settings", NULL, 0);
 
-        ImGui::Checkbox("Enable R", &m_r);
-        ImGui::Checkbox("Enable G", &m_g);
-        ImGui::Checkbox("Enable B", &m_b);
-        ImGui::Checkbox("Enable A", &m_a);
-
         ImGui::Text("Primitive topology:");
-        ImGui::Combo("##topology", (int*)&m_pt, ptNames, BX_COUNTOF(ptNames));
 
         ImGui::End();
 
         imguiEndFrame();
 
+        // Set view 0 default viewport.
+        bgfx::setViewRect(0, 0, 0, uint16_t(m_width), uint16_t(m_height));
+
+        // This dummy draw call is here to make sure that view 0 is cleared
+        // if no other draw calls are submitted to view 0.
+        bgfx::touch(0);
+
         float time = (float)((bx::getHPCounter() - m_timeOffset) / double(bx::getHPFrequency()));
 
         const bx::Vec3 at = { 0.0f, 0.0f, 0.0f };
-        const bx::Vec3 eye = { 0.0f, 0.0f, -35.0f };
+        const bx::Vec3 eye = { 0.0f, 0.0f, -7.0f };
 
         // Set view and projection matrix for view 0.
         {
@@ -130,43 +124,101 @@ bool Game::update()
             bgfx::setViewRect(0, 0, 0, uint16_t(m_width), uint16_t(m_height));
         }
 
-        // This dummy draw call is here to make sure that view 0 is cleared
-        // if no other draw calls are submitted to view 0.
-        bgfx::touch(0);
+        float lightPosRadius[4][4];
+        for (uint32_t ii = 0; ii < m_numLights; ++ii) {
+            lightPosRadius[ii][0] = bx::sin((time * (0.1f + ii * 0.17f) + ii * bx::kPiHalf * 1.37f)) * 3.0f;
+            lightPosRadius[ii][1] = bx::cos((time * (0.2f + ii * 0.29f) + ii * bx::kPiHalf * 1.49f)) * 3.0f;
+            lightPosRadius[ii][2] = -2.5f;
+            lightPosRadius[ii][3] = 3.0f;
+        }
 
-        bgfx::IndexBufferHandle ibh = m_ibh[m_pt];
-        uint64_t state = 0
-            | (m_r ? BGFX_STATE_WRITE_R : 0)
-            | (m_g ? BGFX_STATE_WRITE_G : 0)
-            | (m_b ? BGFX_STATE_WRITE_B : 0)
-            | (m_a ? BGFX_STATE_WRITE_A : 0)
-            | BGFX_STATE_WRITE_Z
-            | BGFX_STATE_DEPTH_TEST_LESS
-            | BGFX_STATE_CULL_CW
-            | BGFX_STATE_MSAA
-            | ptState[m_pt];
+        bgfx::setUniform(u_lightPosRadius, lightPosRadius, m_numLights);
 
-        // Submit 11x11 cubes.
-        for (uint32_t yy = 0, zz = 0; yy < 11; ++yy, ++zz) {
-            for (uint32_t xx = 0; xx < 11; ++xx) {
-                float mtx[16];
-                float mtx2[16];
-                bx::mtxRotateXYZ(mtx, time + xx * 0.21f, time + yy * 0.37f, time + zz * 0.37f);
-                bx::mtxTranslate(mtx2, -15.0f + float(xx) * 3.0f, -15.0f + float(yy) * 3.0f, 0.0f);
-                bx::mtxMul(mtx, mtx, mtx2);
+        float lightRgbInnerR[4][4] = {
+            { 1.0f, 0.7f, 0.2f, 0.8f },
+            { 0.7f, 0.2f, 1.0f, 0.8f },
+            { 0.2f, 1.0f, 0.7f, 0.8f },
+            { 1.0f, 0.4f, 0.2f, 0.8f },
+        };
 
-                // Set model matrix for rendering.
-                bgfx::setTransform(mtx);
+        bgfx::setUniform(u_lightRgbInnerR, lightRgbInnerR, m_numLights);
 
-                // Set vertex and index buffer.
-                bgfx::setVertexBuffer(0, m_vbh);
-                bgfx::setIndexBuffer(ibh);
+        const uint16_t instanceStride = 64;
+        const uint16_t numInstances = 3;
 
-                // Set render states.
-                bgfx::setState(state);
+        if (m_instancingSupported) {
+            // Write instance data for 3x3 cubes.
+            for (uint32_t yy = 0; yy < 3; ++yy) {
+                if (numInstances == bgfx::getAvailInstanceDataBuffer(numInstances, instanceStride)) {
+                    bgfx::InstanceDataBuffer idb;
+                    bgfx::allocInstanceDataBuffer(&idb, numInstances, instanceStride);
 
-                // Submit primitive for rendering to view 0.
-                bgfx::submit(0, m_program);
+                    uint8_t* data = idb.data;
+
+                    for (uint32_t xx = 0; xx < 3; ++xx) {
+                        float* mtx = (float*)data;
+                        bx::mtxRotateXY(mtx, time * 0.023f + xx * 0.21f, time * 0.03f + yy * 0.37f);
+                        mtx[12] = -3.0f + float(xx) * 3.0f;
+                        mtx[13] = -3.0f + float(yy) * 3.0f;
+                        mtx[14] = 0.0f;
+
+                        data += instanceStride;
+                    }
+
+                    // Set instance data buffer.
+                    bgfx::setInstanceDataBuffer(&idb, 0, numInstances);
+
+                    // Set vertex and index buffer.
+                    bgfx::setVertexBuffer(0, m_vbh);
+                    bgfx::setIndexBuffer(m_ibh);
+
+                    // Bind textures.
+                    bgfx::setTexture(0, s_texColor, m_textureColor);
+                    bgfx::setTexture(1, s_texNormal, m_textureNormal);
+
+                    // Set render states.
+                    bgfx::setState(0
+                        | BGFX_STATE_WRITE_RGB
+                        | BGFX_STATE_WRITE_A
+                        | BGFX_STATE_WRITE_Z
+                        | BGFX_STATE_DEPTH_TEST_LESS
+                        | BGFX_STATE_MSAA);
+
+                    // Submit primitive for rendering to view 0.
+                    bgfx::submit(0, m_program);
+                }
+            }
+        } else {
+            for (uint32_t yy = 0; yy < 3; ++yy) {
+                for (uint32_t xx = 0; xx < 3; ++xx) {
+                    float mtx[16];
+                    bx::mtxRotateXY(mtx, time * 0.023f + xx * 0.21f, time * 0.03f + yy * 0.37f);
+                    mtx[12] = -3.0f + float(xx) * 3.0f;
+                    mtx[13] = -3.0f + float(yy) * 3.0f;
+                    mtx[14] = 0.0f;
+
+                    // Set transform for draw call.
+                    bgfx::setTransform(mtx);
+
+                    // Set vertex and index buffer.
+                    bgfx::setVertexBuffer(0, m_vbh);
+                    bgfx::setIndexBuffer(m_ibh);
+
+                    // Bind textures.
+                    bgfx::setTexture(0, s_texColor, m_textureColor);
+                    bgfx::setTexture(1, s_texNormal, m_textureNormal);
+
+                    // Set render states.
+                    bgfx::setState(0
+                        | BGFX_STATE_WRITE_RGB
+                        | BGFX_STATE_WRITE_A
+                        | BGFX_STATE_WRITE_Z
+                        | BGFX_STATE_DEPTH_TEST_LESS
+                        | BGFX_STATE_MSAA);
+
+                    // Submit primitive for rendering to view 0.
+                    bgfx::submit(0, m_program);
+                }
             }
         }
 
@@ -179,4 +231,3 @@ bool Game::update()
 
     return false;
 }
-

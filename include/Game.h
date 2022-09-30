@@ -3,150 +3,119 @@
 #include "imgui/imgui.h"
 #include <bx/uint32_t.h>
 
-struct PosColorVertex {
+/*
+ * Copyright 2011-2022 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
+ */
+
+#include "bgfx_utils.h"
+#include "common.h"
+#include "imgui/imgui.h"
+
+struct PosNormalTangentTexcoordVertex {
     float m_x;
     float m_y;
     float m_z;
-    uint32_t m_abgr;
+    uint32_t m_normal;
+    uint32_t m_tangent;
+    int16_t m_u;
+    int16_t m_v;
 
     static void init()
     {
-        vrt_layout
+        ms_layout
             .begin()
             .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+            .add(bgfx::Attrib::Normal, 4, bgfx::AttribType::Uint8, true, true)
+            .add(bgfx::Attrib::Tangent, 4, bgfx::AttribType::Uint8, true, true)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Int16, true, true)
             .end();
-    };
+    }
 
-    static bgfx::VertexLayout vrt_layout;
+    static bgfx::VertexLayout ms_layout;
 };
 
 // clang-format off
-static PosColorVertex cubeVertices[] = {
-	{-1.0f,  1.0f,  1.0f, 0x00f9d83d },
-	{ 1.0f,  1.0f,  1.0f, 0x00f9d83d },
-	{-1.0f, -1.0f,  1.0f, 0x0093f964 },
-	{ 1.0f, -1.0f,  1.0f, 0x0093f964 },
-	{-1.0f,  1.0f, -1.0f, 0x00fd50f4 },
-	{ 1.0f,  1.0f, -1.0f, 0x00fd50f4 },
-	{-1.0f, -1.0f, -1.0f, 0x000000d3 },
-	{ 1.0f, -1.0f, -1.0f, 0x000000d3 },
-}
-;
-
-static const uint16_t cubeTriList[] =
+static PosNormalTangentTexcoordVertex s_cubeVertices[24] =
 {
-	// face 1
-	0, 1, 2,
-	1, 3, 2,
-
-	// face 2
-	4, 6, 5,
-	5, 6, 7,
-
-	// face 3
-	0, 2, 4,
-	4, 2, 6,
-	// face 4
-	1, 5, 3,
-	5, 7, 3,
-
-	//face 5
-	0, 4, 1,
-	4, 5, 1,
-
-	//face 6
-	2, 3, 6,
-	6, 3, 7,
+	{-1.0f,  1.0f,  1.0f, encodeNormalRgba8( 0.0f,  0.0f,  1.0f), 0,      0,      0 },
+	{ 1.0f,  1.0f,  1.0f, encodeNormalRgba8( 0.0f,  0.0f,  1.0f), 0, 0x7fff,      0 },
+	{-1.0f, -1.0f,  1.0f, encodeNormalRgba8( 0.0f,  0.0f,  1.0f), 0,      0, 0x7fff },
+	{ 1.0f, -1.0f,  1.0f, encodeNormalRgba8( 0.0f,  0.0f,  1.0f), 0, 0x7fff, 0x7fff },
+	{-1.0f,  1.0f, -1.0f, encodeNormalRgba8( 0.0f,  0.0f, -1.0f), 0,      0,      0 },
+	{ 1.0f,  1.0f, -1.0f, encodeNormalRgba8( 0.0f,  0.0f, -1.0f), 0, 0x7fff,      0 },
+	{-1.0f, -1.0f, -1.0f, encodeNormalRgba8( 0.0f,  0.0f, -1.0f), 0,      0, 0x7fff },
+	{ 1.0f, -1.0f, -1.0f, encodeNormalRgba8( 0.0f,  0.0f, -1.0f), 0, 0x7fff, 0x7fff },
+	{-1.0f,  1.0f,  1.0f, encodeNormalRgba8( 0.0f,  1.0f,  0.0f), 0,      0,      0 },
+	{ 1.0f,  1.0f,  1.0f, encodeNormalRgba8( 0.0f,  1.0f,  0.0f), 0, 0x7fff,      0 },
+	{-1.0f,  1.0f, -1.0f, encodeNormalRgba8( 0.0f,  1.0f,  0.0f), 0,      0, 0x7fff },
+	{ 1.0f,  1.0f, -1.0f, encodeNormalRgba8( 0.0f,  1.0f,  0.0f), 0, 0x7fff, 0x7fff },
+	{-1.0f, -1.0f,  1.0f, encodeNormalRgba8( 0.0f, -1.0f,  0.0f), 0,      0,      0 },
+	{ 1.0f, -1.0f,  1.0f, encodeNormalRgba8( 0.0f, -1.0f,  0.0f), 0, 0x7fff,      0 },
+	{-1.0f, -1.0f, -1.0f, encodeNormalRgba8( 0.0f, -1.0f,  0.0f), 0,      0, 0x7fff },
+	{ 1.0f, -1.0f, -1.0f, encodeNormalRgba8( 0.0f, -1.0f,  0.0f), 0, 0x7fff, 0x7fff },
+	{ 1.0f, -1.0f,  1.0f, encodeNormalRgba8( 1.0f,  0.0f,  0.0f), 0,      0,      0 },
+	{ 1.0f,  1.0f,  1.0f, encodeNormalRgba8( 1.0f,  0.0f,  0.0f), 0, 0x7fff,      0 },
+	{ 1.0f, -1.0f, -1.0f, encodeNormalRgba8( 1.0f,  0.0f,  0.0f), 0,      0, 0x7fff },
+	{ 1.0f,  1.0f, -1.0f, encodeNormalRgba8( 1.0f,  0.0f,  0.0f), 0, 0x7fff, 0x7fff },
+	{-1.0f, -1.0f,  1.0f, encodeNormalRgba8(-1.0f,  0.0f,  0.0f), 0,      0,      0 },
+	{-1.0f,  1.0f,  1.0f, encodeNormalRgba8(-1.0f,  0.0f,  0.0f), 0, 0x7fff,      0 },
+	{-1.0f, -1.0f, -1.0f, encodeNormalRgba8(-1.0f,  0.0f,  0.0f), 0,      0, 0x7fff },
+	{-1.0f,  1.0f, -1.0f, encodeNormalRgba8(-1.0f,  0.0f,  0.0f), 0, 0x7fff, 0x7fff },
 };
 
-static const uint16_t cubeTriStrip[] =
+static const uint16_t s_cubeIndices[36] =
 {
-	0, 1, 2,
-	3, 7, 1,
-	5, 0, 4,
-	2, 6, 7,
-	4,
-	5,
+	 0,  2,  1,
+	 1,  2,  3,
+	 4,  5,  6,
+	 5,  7,  6,
+
+	 8, 10,  9,
+	 9, 10, 11,
+	12, 13, 14,
+	13, 15, 14,
+
+	16, 18, 17,
+	17, 18, 19,
+	20, 21, 22,
+	21, 23, 22,
 };
 
-static const uint16_t cubeLineList[] =
+// clang-format off
+class Game : public entry::AppI
 {
-	0, 1,
-	0, 2,
-	0, 4,
-	1, 3,
-	1, 5,
-	2, 3,
-	2, 6,
-	3, 7,
-	4, 5,
-	4, 6,
-	5, 7,
-	6, 7,
-};
-
-static const uint16_t cubeLineStrip[] =
-{
-	0, 2, 3, 1, 5, 7, 6, 4,
-	0, 2, 6, 4, 5, 7, 3, 1,
-	0,
-};
-
-static const uint16_t cubePoints[] =
-{
-	0, 1, 2, 3, 4, 5, 6, 7
-};
-
-static const char* ptNames[]
-{
-	"Triangle List",
-	"Triangle Strip",
-	"Lines",
-	"Line Strip",
-	"Points",
-};
-
-static const uint64_t ptState[]
-{
-	UINT64_C(0),
-	BGFX_STATE_PT_TRISTRIP,
-	BGFX_STATE_PT_LINES,
-	BGFX_STATE_PT_LINESTRIP,
-	BGFX_STATE_PT_POINTS,
-};
-// clang-format on
-
-class Game : public entry::AppI {
 public:
-    Game(char const* _name, char const* _description, char const* _url)
-        : entry::AppI(_name, _description, _url)
-        , m_r(1)
-        , m_g(1)
-        , m_b(1)
-    {
-    }
+	Game(const char* _name, const char* _description, const char* _url)
+		: entry::AppI(_name, _description, _url)
+	{
+	}
 
-    void init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32_t _height) override;
+	void init(int32_t _argc, const char* const* _argv, uint32_t _width, uint32_t _height) override;
 
-    virtual int shutdown() override;
+	virtual int shutdown() override;
 
-    bool update() override;
+	bool update() override;
 
-    entry::MouseState m_mouseState;
+	entry::MouseState m_mouseState;
 
-    uint32_t m_width;
-    uint32_t m_height;
-    uint32_t m_debug;
-    uint32_t m_reset;
-    bgfx::VertexBufferHandle m_vbh;
-    bgfx::IndexBufferHandle m_ibh[BX_COUNTOF(ptState)];
-    bgfx::ProgramHandle m_program;
-    int64_t m_timeOffset;
-    int32_t m_pt;
+	bgfx::VertexBufferHandle m_vbh;
+	bgfx::IndexBufferHandle  m_ibh;
+	bgfx::UniformHandle s_texColor;
+	bgfx::UniformHandle s_texNormal;
+	bgfx::UniformHandle u_lightPosRadius;
+	bgfx::UniformHandle u_lightRgbInnerR;
+	bgfx::ProgramHandle m_program;
+	bgfx::TextureHandle m_textureColor;
+	bgfx::TextureHandle m_textureNormal;
+	uint16_t m_numLights;
+	bool m_instancingSupported;
 
-    bool m_r;
-    bool m_g;
-    bool m_b;
-    bool m_a;
+	uint32_t m_width;
+	uint32_t m_height;
+	uint32_t m_debug;
+	uint32_t m_reset;
+	int64_t m_timeOffset;
 };
+
+
