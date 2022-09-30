@@ -53,15 +53,14 @@ void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32
     // Create static index buffer for line strip rendering.
     m_ibh[3] = bgfx::createIndexBuffer(
         // Static data can be passed with bgfx::makeRef
-        bgfx::makeRef(cubeLineStrip, sizeof(cubeLineStrip))
-
-    );
+        bgfx::makeRef(cubeLineStrip, sizeof(cubeLineStrip)));
 
     // Create static index buffer for point list rendering.
     m_ibh[4] = bgfx::createIndexBuffer(
         // Static data can be passed with bgfx::makeRef
         bgfx::makeRef(cubePoints, sizeof(cubePoints)));
 
+    // load the shader program which alraedy been compiled
     m_program = loadProgram("vs_cubes", "fs_cubes");
 
     m_timeOffset = bx::getHPCounter();
@@ -90,7 +89,8 @@ int Game::shutdown()
 bool Game::update()
 {
     if (!entry::processEvents(m_width, m_height, m_debug, m_reset, &m_mouseState)) {
-        imguiBeginFrame(m_mouseState.m_mx, m_mouseState.m_my, (m_mouseState.m_buttons[entry::MouseButton::Left] ? IMGUI_MBUT_LEFT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Right] ? IMGUI_MBUT_RIGHT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Middle] ? IMGUI_MBUT_MIDDLE : 0), m_mouseState.m_mz, uint16_t(m_width), uint16_t(m_height));
+        imguiBeginFrame(m_mouseState.m_mx, m_mouseState.m_my,
+            (m_mouseState.m_buttons[entry::MouseButton::Left] ? IMGUI_MBUT_LEFT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Right] ? IMGUI_MBUT_RIGHT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Middle] ? IMGUI_MBUT_MIDDLE : 0), m_mouseState.m_mz, uint16_t(m_width), uint16_t(m_height));
 
         showExampleDialog(this);
 
@@ -100,10 +100,10 @@ bool Game::update()
             ImVec2(m_width / 5.0f, m_height / 3.5f), ImGuiCond_FirstUseEver);
         ImGui::Begin("Settings", NULL, 0);
 
-        ImGui::Checkbox("Write R", &m_r);
-        ImGui::Checkbox("Write G", &m_g);
-        ImGui::Checkbox("Write B", &m_b);
-        ImGui::Checkbox("Write A", &m_a);
+        ImGui::Checkbox("Enable R", &m_r);
+        ImGui::Checkbox("Enable G", &m_g);
+        ImGui::Checkbox("Enable B", &m_b);
+        ImGui::Checkbox("Enable A", &m_a);
 
         ImGui::Text("Primitive topology:");
         ImGui::Combo("##topology", (int*)&m_pt, ptNames, BX_COUNTOF(ptNames));
@@ -147,13 +147,13 @@ bool Game::update()
             | ptState[m_pt];
 
         // Submit 11x11 cubes.
-        for (uint32_t yy = 0; yy < 11; ++yy) {
+        for (uint32_t yy = 0, zz = 0; yy < 11; ++yy, ++zz) {
             for (uint32_t xx = 0; xx < 11; ++xx) {
                 float mtx[16];
-                bx::mtxRotateXY(mtx, time + xx * 0.21f, time + yy * 0.37f);
-                mtx[12] = -15.0f + float(xx) * 3.0f;
-                mtx[13] = -15.0f + float(yy) * 3.0f;
-                mtx[14] = 0.0f;
+                float mtx2[16];
+                bx::mtxRotateXYZ(mtx, time + xx * 0.21f, time + yy * 0.37f, time + zz * 0.37f);
+                bx::mtxTranslate(mtx2, -15.0f + float(xx) * 3.0f, -15.0f + float(yy) * 3.0f, 0.0f);
+                bx::mtxMul(mtx, mtx, mtx2);
 
                 // Set model matrix for rendering.
                 bgfx::setTransform(mtx);
