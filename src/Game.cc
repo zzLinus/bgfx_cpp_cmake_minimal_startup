@@ -64,10 +64,10 @@ void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32
     m_program = loadProgram(m_instancingSupported ? "vs_bump_instanced" : "vs_bump", "fs_bump");
 
     // Load diffuse texture.
-    m_textureColor = loadTexture("textures/fieldstone-rgba.dds");
+    m_textureColor = loadTexture("textures/sprite-metal.png", BGFX_SAMPLER_MAG_POINT);
 
     // Load normal texture.
-    m_textureNormal = loadTexture("textures/fieldstone-n.dds");
+    m_textureNormal = loadTexture("textures/sprite-metal.png", BGFX_SAMPLER_MAG_POINT);
 
     m_timeOffset = bx::getHPCounter();
 
@@ -184,8 +184,8 @@ bool Game::update()
                         float* mtx = (float*)data;
                         // bx::mtxRotateXY(mtx, time * 0.023f + xx * 0.21f, time * 0.03f + yy * 0.37f);
                         bx::mtxRotateXY(mtx, 0.0f, 0.0f);
-                        mtx[12] = -3.0f + float(xx) * 2.0f;
-                        mtx[13] = -3.0f + float(yy) * 2.0f;
+                        mtx[12] = -3.0f + float(xx) * 2.5f;
+                        mtx[13] = -3.0f + float(yy) * 2.5f;
                         mtx[14] = 0.0f;
 
                         data += instanceStride;
