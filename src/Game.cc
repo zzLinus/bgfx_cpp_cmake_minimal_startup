@@ -1,4 +1,8 @@
 #include "Game.h"
+#include "camera.h"
+#include "common.h"
+#include "imgui/imgui.h"
+#include <bx/uint32_t.h>
 
 bgfx::VertexLayout PosNormalTangentTexcoordVertex::ms_layout;
 
@@ -10,6 +14,11 @@ void Game::init(int32_t _argc, char const* const* _argv, uint32_t _width, uint32
     m_height = _height;
     m_debug = BGFX_DEBUG_NONE;
     m_reset = BGFX_RESET_VSYNC;
+
+    // create camera
+    cameraCreate();
+    cameraSetPosition({ 0.0f, 0.0f, -15.0f });
+    cameraSetVerticalAngle(0.0f);
 
     bgfx::Init init;
     init.type = args.m_type;
@@ -83,15 +92,20 @@ int Game::shutdown()
     // Shutdown bgfx.
     bgfx::shutdown();
 
+    cameraDestroy();
+
     return 0;
 }
 
 bool Game::update()
 {
     if (!entry::processEvents(m_width, m_height, m_debug, m_reset, &m_mouseState)) {
+
         imguiBeginFrame(m_mouseState.m_mx, m_mouseState.m_my, (m_mouseState.m_buttons[entry::MouseButton::Left] ? IMGUI_MBUT_LEFT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Right] ? IMGUI_MBUT_RIGHT : 0) | (m_mouseState.m_buttons[entry::MouseButton::Middle] ? IMGUI_MBUT_MIDDLE : 0), m_mouseState.m_mz, uint16_t(m_width), uint16_t(m_height));
 
         ImGui::Begin("Settings", NULL, 0);
+
+        showExampleDialog(this);
 
         ImGui::Text("Primitive topology:");
 
@@ -106,15 +120,26 @@ bool Game::update()
         // if no other draw calls are submitted to view 0.
         bgfx::touch(0);
 
-        float time = (float)((bx::getHPCounter() - m_timeOffset) / double(bx::getHPFrequency()));
+        int64_t now = bx::getHPCounter();
+        static int64_t last = now;
+        const int64_t frameTime = now - last;
+        last = now;
+        double const freq = double(bx::getHPFrequency());
+        float const deltaTime = float(frameTime / freq);
+
+        float time = (float)((now - m_timeOffset) / freq);
 
         const bx::Vec3 at = { 0.0f, 0.0f, 0.0f };
         const bx::Vec3 eye = { 0.0f, 0.0f, -7.0f };
 
         // Set view and projection matrix for view 0.
+        //
+        cameraUpdate(deltaTime, m_mouseState, ImGui::MouseOverArea());
+
+        float view[16];
+        cameraGetViewMtx(view);
         {
-            float view[16];
-            bx::mtxLookAt(view, eye, at);
+            // bx::mtxLookAt(view, cameraGetPosition(), at);
 
             float proj[16];
             bx::mtxProj(proj, 60.0f, float(m_width) / float(m_height), 0.1f, 100.0f, bgfx::getCaps()->homogeneousDepth);
@@ -231,3 +256,4 @@ bool Game::update()
 
     return false;
 }
+

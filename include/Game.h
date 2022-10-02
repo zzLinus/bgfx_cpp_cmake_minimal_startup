@@ -1,8 +1,3 @@
-#include "bgfx_utils.h"
-#include "common.h"
-#include "imgui/imgui.h"
-#include <bx/uint32_t.h>
-
 /*
  * Copyright 2011-2022 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
@@ -10,7 +5,6 @@
 
 #include "bgfx_utils.h"
 #include "common.h"
-#include "imgui/imgui.h"
 
 struct PosNormalTangentTexcoordVertex {
     float m_x;
