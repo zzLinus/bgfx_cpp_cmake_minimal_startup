@@ -30,6 +30,7 @@ struct PosNormalTangentTexcoordVertex {
 };
 
 // clang-format off
+// 24 = 4(number of texture coords) x 6 (number of cube faces)
 static PosNormalTangentTexcoordVertex s_cubeVertices[24] =
 {
 	{-1.0f,  1.0f,  1.0f, encodeNormalRgba8( 0.0f,  0.0f,  1.0f), 0,      0,      0 },
@@ -60,18 +61,27 @@ static PosNormalTangentTexcoordVertex s_cubeVertices[24] =
 
 static const uint16_t s_cubeIndices[36] =
 {
+	// face 1
 	 0,  2,  1,
 	 1,  2,  3,
+
+	 // face2 
 	 4,  5,  6,
 	 5,  7,  6,
 
+	 // face 3
 	 8, 10,  9,
 	 9, 10, 11,
+
+	// face 4
 	12, 13, 14,
 	13, 15, 14,
 
+	// face 5
 	16, 18, 17,
 	17, 18, 19,
+
+	// face 6
 	20, 21, 22,
 	21, 23, 22,
 };

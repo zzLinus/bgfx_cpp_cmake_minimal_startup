@@ -168,7 +168,7 @@ bool Game::update()
 
         bgfx::setUniform(u_lightRgbInnerR, lightRgbInnerR, m_numLights);
 
-        const uint16_t instanceStride = 64;
+        const uint16_t instanceStride = 64; // 4(sizeof(float)) x 16
         const uint16_t numInstances = 3;
 
         if (m_instancingSupported) {
@@ -182,9 +182,10 @@ bool Game::update()
 
                     for (uint32_t xx = 0; xx < 3; ++xx) {
                         float* mtx = (float*)data;
-                        bx::mtxRotateXY(mtx, time * 0.023f + xx * 0.21f, time * 0.03f + yy * 0.37f);
-                        mtx[12] = -3.0f + float(xx) * 3.0f;
-                        mtx[13] = -3.0f + float(yy) * 3.0f;
+                        // bx::mtxRotateXY(mtx, time * 0.023f + xx * 0.21f, time * 0.03f + yy * 0.37f);
+                        bx::mtxRotateXY(mtx, 0.0f, 0.0f);
+                        mtx[12] = -3.0f + float(xx) * 2.0f;
+                        mtx[13] = -3.0f + float(yy) * 2.0f;
                         mtx[14] = 0.0f;
 
                         data += instanceStride;
